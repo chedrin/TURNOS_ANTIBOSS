@@ -13,7 +13,6 @@
   <link rel="manifest" href="manifest.json">
   <link rel="icon" type="image/svg+xml" href="icon.svg">
   <link rel="apple-touch-icon" href="icon.svg">
-  
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -34,9 +33,6 @@
         </div>
 
         <div class="header-actions">
-          <button id="btn-install" class="btn-icon hidden" title="Instalar en pantalla de inicio">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-          </button>
           <button id="btn-open-settings" class="btn-icon" title="Ajustes y Convenio">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
           </button>
@@ -97,7 +93,7 @@
 
         <div class="quick-stamp-container no-print">
           <div class="quick-stamp-header">
-            <span class="stamp-mode-title">🎨 Modo Asignación Rápida:</span>
+            <span class="stamp-mode-title">🎨 Asignación Rápida:</span>
             <span id="stamp-indicator" class="stamp-indicator">Toque normal para detalles</span>
           </div>
           <div id="quick-stamp-palette" class="stamp-palette"></div>
@@ -111,7 +107,7 @@
         </div>
 
         <div class="legend-card no-print">
-          <div class="legend-title">Leyenda de Turnos Activos</div>
+          <div class="legend-title">Leyenda de Turnos y Permisos</div>
           <div id="legend-items" class="legend-grid"></div>
         </div>
       </section>
@@ -119,14 +115,14 @@
       <section id="tab-balances" class="tab-pane">
         <div class="section-header">
           <h2>Panel de Permisos y Vacaciones</h2>
-          <p class="section-desc">Cálculo en tiempo real: Días de convenio asignados menos días registrados.</p>
+          <p class="section-desc">Cálculo en tiempo real: Se descuentan tus días de permiso manteniendo visible tu turno de cuadrante.</p>
         </div>
 
         <div class="balances-grid">
           <div class="balance-card balance-vac">
             <div class="balance-card-header">
               <div class="balance-title"><span class="balance-icon">🏖️</span><h3>Vacaciones Anuales</h3></div>
-              <span id="badge-vac-status" class="balance-tag">En regla</span>
+              <span class="balance-tag">Horas turno = 0h</span>
             </div>
             <div class="balance-numbers">
               <div class="num-box"><span class="num-label">Asignadas</span><span id="vac-assigned" class="num-val">22</span></div>
@@ -141,7 +137,7 @@
           <div class="balance-card balance-ap">
             <div class="balance-card-header">
               <div class="balance-title"><span class="balance-icon">📑</span><h3>Asuntos Propios (AP)</h3></div>
-              <span id="badge-ap-status" class="balance-tag">Disponible</span>
+              <span class="balance-tag">Horas turno = 0h</span>
             </div>
             <div class="balance-numbers">
               <div class="num-box"><span class="num-label">Asignados</span><span id="ap-assigned" class="num-val">6</span></div>
@@ -155,8 +151,8 @@
 
           <div class="balance-card balance-ld">
             <div class="balance-card-header">
-              <div class="balance-title"><span class="balance-icon">⏱️</span><h3>Libre Disposición (LD) / Convenio</h3></div>
-              <span id="badge-ld-status" class="balance-tag">Disponible</span>
+              <div class="balance-title"><span class="balance-icon">⏱️</span><h3>Libre Disposición (LD)</h3></div>
+              <span class="balance-tag text-success">Suma horas turno</span>
             </div>
             <div class="balance-numbers">
               <div class="num-box"><span class="num-label">Asignados</span><span id="ld-assigned" class="num-val">4</span></div>
@@ -170,34 +166,32 @@
         </div>
 
         <div class="history-card">
-          <h3 class="card-subtitle">Registro Detallado de Permisos Disfrutados este Año</h3>
-          <div id="permissions-history-list" class="history-list">
-            <p class="empty-state">No has registrado días de Vacaciones, AP o LD aún.</p>
-          </div>
+          <h3 class="card-subtitle">Historial Detallado de Días Disfrutados</h3>
+          <div id="permissions-history-list" class="history-list"></div>
         </div>
       </section>
 
       <section id="tab-calculator" class="tab-pane">
         <div class="section-header">
           <h2>Calculadora y Balances Mensuales</h2>
-          <p class="section-desc">Auditoría automática de horas trabajadas vs. exigencias del convenio.</p>
+          <p class="section-desc">Auditoría automática de horas trabajadas y festividades.</p>
         </div>
 
         <div class="calc-metrics-grid">
           <div class="calc-card">
-            <span class="calc-label">Horas Trabajadas (Mes Activo)</span>
+            <span class="calc-label">Horas Trabajadas Computables (Mes)</span>
             <div class="calc-big-number"><span id="calc-worked-hours">0</span> <small>horas</small></div>
-            <div class="calc-subinfo">Incluye horas nominales de turno + horas extra</div>
+            <div class="calc-subinfo">Turnos normales + Festivos + LD (+ horas extra)</div>
           </div>
 
           <div class="calc-card">
             <span class="calc-label">Horas Exigidas por Convenio</span>
             <div class="calc-big-number"><span id="calc-target-hours">160</span> <small>horas</small></div>
-            <div class="calc-subinfo">Configurable según tu jornada en Ajustes</div>
+            <div class="calc-subinfo">Configurable en Ajustes</div>
           </div>
 
           <div class="calc-card highlight-card">
-            <span class="calc-label">Diferencia Neta (Balance)</span>
+            <span class="calc-label">Balance Neto</span>
             <div class="calc-big-number" id="calc-balance-container"><span id="calc-balance-hours">0</span> <small>horas</small></div>
             <div id="calc-balance-badge" class="badge-status">En equilibrio</div>
           </div>
@@ -206,16 +200,6 @@
         <div class="breakdown-card">
           <h3 class="card-subtitle">Desglose de Jornadas del Mes</h3>
           <div id="month-shifts-breakdown" class="breakdown-list"></div>
-        </div>
-
-        <div class="overtime-card">
-          <div class="overtime-header">
-            <div>
-              <h3>Horas Extraordinarias Declaradas</h3>
-              <p class="subtext">Horas que superaron tu turno nominal este mes.</p>
-            </div>
-            <span id="calc-month-overtime" class="badge-overtime">+0h extra</span>
-          </div>
         </div>
       </section>
 
@@ -226,17 +210,17 @@
           </div>
           <div>
             <h2>Auditoría Antifraude Laboral</h2>
-            <p>Tus cuentas claras, respaldadas y listas para confrontar con RRHH o Jefatura.</p>
+            <p>Tus cuentas de turnos, festivos y vacaciones claras para confrontar con la empresa.</p>
           </div>
         </div>
 
         <div class="anti-boss-summary-card">
-          <h3 class="summary-head">Estado Global de Derechos que la Empresa te Debe</h3>
+          <h3 class="summary-head">Resumen de Derechos que la Empresa te Debe</h3>
           <div class="audit-kpi-grid">
-            <div class="audit-kpi"><div class="kpi-value text-accent" id="audit-vac-due">0</div><div class="kpi-label">Días Vacaciones Pendientes</div></div>
-            <div class="audit-kpi"><div class="kpi-value text-accent" id="audit-ap-due">0</div><div class="kpi-label">Asuntos Propios por Disfrutar</div></div>
-            <div class="audit-kpi"><div class="kpi-value text-accent" id="audit-ld-due">0</div><div class="kpi-label">Libre Disposición Restante</div></div>
-            <div class="audit-kpi"><div class="kpi-value" id="audit-hours-balance">0h</div><div class="kpi-label">Balance Anual de Horas Extra</div></div>
+            <div class="audit-kpi"><div class="kpi-value text-accent" id="audit-vac-due">0</div><div class="kpi-label">Vacaciones Pendientes</div></div>
+            <div class="audit-kpi"><div class="kpi-value text-accent" id="audit-ap-due">0</div><div class="kpi-label">Asuntos Propios Pendientes</div></div>
+            <div class="audit-kpi"><div class="kpi-value text-accent" id="audit-ld-due">0</div><div class="kpi-label">Libre Disposición Pendiente</div></div>
+            <div class="audit-kpi"><div class="kpi-value text-festive" id="audit-festives-due">0</div><div class="kpi-label">Festivos Trabajados (a cobrar)</div></div>
           </div>
         </div>
 
@@ -245,14 +229,11 @@
             <h3>Bitácora de Observaciones y Salidas Tardías</h3>
             <span class="subtext">Notas guardadas en días con incidencias o cambios imprevistos</span>
           </div>
-          <div id="audit-incidents-list" class="incidents-list">
-            <p class="empty-state">No hay notas de incidencias registradas en los turnos.</p>
-          </div>
+          <div id="audit-incidents-list" class="incidents-list"></div>
         </div>
 
         <div class="audit-actions-card no-print">
           <h3>Justificantes y Comunicaciones Formales</h3>
-          <p class="subtext">Genera un texto formal estructurado con emojis y datos legales para enviar por WhatsApp o correo a tu empresa.</p>
           <div class="action-buttons-grid">
             <button id="btn-copy-whatsapp" class="btn btn-whatsapp">
               <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12.04 2c-5.46 0-9.91 4.45-9.91 9.91 0 1.75.46 3.45 1.32 4.95L2.05 22l5.25-1.38c1.45.79 3.08 1.21 4.74 1.21 5.46 0 9.91-4.45 9.91-9.91 0-2.65-1.03-5.14-2.9-7.01A9.816 9.816 0 0 0 12.04 2z"/></svg>
@@ -272,16 +253,23 @@
         <div class="modal-header">
           <div>
             <h3 id="modal-date-title" class="modal-title">Fecha</h3>
-            <span id="modal-date-subtitle" class="modal-sub">Detalle de jornada</span>
+            <span id="modal-date-subtitle" class="modal-sub">Detalle de jornada y permisos</span>
           </div>
           <button id="modal-btn-close" class="btn-close" aria-label="Cerrar">&times;</button>
         </div>
 
         <div class="modal-body">
           <div class="form-group">
-            <label class="form-label">Tipo de Turno / Permiso</label>
-            <div id="modal-shift-options" class="shift-chips-selector"></div>
+            <label class="form-label">1. Turno de Cuadrante (Base)</label>
+            <div id="modal-base-shifts" class="shift-chips-selector"></div>
           </div>
+
+          <div class="form-group">
+            <label class="form-label">2. Permiso o Condición Especial</label>
+            <div id="modal-modifiers" class="shift-chips-selector"></div>
+          </div>
+
+          <div id="modal-rule-notice" class="rule-notice"></div>
 
           <div class="form-row-2">
             <div class="form-group">
@@ -289,23 +277,20 @@
               <input type="number" id="input-day-hours" class="form-control" step="0.5" min="0" max="24">
             </div>
             <div class="form-group">
-              <label for="input-day-overtime" class="form-label">Horas Extra (adicionales)</label>
+              <label for="input-day-overtime" class="form-label">Horas Extra</label>
               <input type="number" id="input-day-overtime" class="form-control" step="0.5" min="0" max="12" value="0">
             </div>
           </div>
 
           <div class="form-group">
-            <label for="input-day-notes" class="form-label">
-              Notas e Incidencias Laborales
-              <span class="label-hint">(Pruebas, cambios de turno, avisos)</span>
-            </label>
-            <textarea id="input-day-notes" class="form-control text-area" rows="2" placeholder="Ej: Me hicieron salir 1.5h más tarde. Hablado con encargado."></textarea>
+            <label for="input-day-notes" class="form-label">Notas e Incidencias Laborales</label>
+            <textarea id="input-day-notes" class="form-control text-area" rows="2" placeholder="Ej: Festivo trabajado en turno de mañana."></textarea>
           </div>
         </div>
 
         <div class="modal-footer">
-          <button id="modal-btn-delete" class="btn btn-danger-outline">Borrar Turno</button>
-          <button id="modal-btn-save" class="btn btn-primary">Guardar Turno</button>
+          <button id="modal-btn-delete" class="btn btn-danger-outline">Limpiar Día</button>
+          <button id="modal-btn-save" class="btn btn-primary">Guardar Jornada</button>
         </div>
       </div>
     </div>
@@ -341,7 +326,6 @@
             <div class="form-group">
               <label for="cfg-target-hours" class="form-label">Horas Estándar Mensuales exigidas por convenio</label>
               <input type="number" id="cfg-target-hours" class="form-control" min="1" max="250" value="160">
-              <span class="label-hint">Ejemplo: 160h para jornada completa de 40h/semana.</span>
             </div>
           </div>
 
@@ -364,8 +348,7 @@
           </div>
 
           <div class="settings-section">
-            <h4 class="settings-section-title">Seguridad y Copia de Respaldo</h4>
-            <p class="settings-help">Tus datos se guardan sólo en la memoria local de este navegador.</p>
+            <h4 class="settings-section-title">Seguridad y Respaldo</h4>
             <div class="backup-actions">
               <button id="btn-export-backup" class="btn btn-secondary">Exportar Copia (.JSON)</button>
               <label class="btn btn-secondary btn-file">

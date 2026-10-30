@@ -1,14 +1,17 @@
 ﻿const STORAGE_KEY = 'antiboss_turnos_state_v1';
 
-const DEFAULT_SHIFT_TYPES = {
-  M: { id: 'M', name: 'Mañana', short: 'M', hours: 8, color: '#0284c7', isWork: true },
-  T: { id: 'T', name: 'Tarde', short: 'T', hours: 8, color: '#ea580c', isWork: true },
-  N: { id: 'N', name: 'Noche', short: 'N', hours: 8, color: '#7c3aed', isWork: true },
-  L: { id: 'L', name: 'Libre / Descanso', short: 'L', hours: 0, color: '#10b981', isWork: false },
-  F: { id: 'F', name: 'Festivo', short: 'F', hours: 0, color: '#e11d48', isWork: false },
-  V: { id: 'V', name: 'Vacaciones', short: 'VAC', hours: 0, color: '#0d9488', isWork: false },
-  AP: { id: 'AP', name: 'Asuntos Propios', short: 'AP', hours: 0, color: '#6366f1', isWork: false },
-  LD: { id: 'LD', name: 'Libre Disposición', short: 'LD', hours: 0, color: '#d946ef', isWork: false }
+const BASE_SHIFTS = {
+  M: { id: 'M', name: 'Mañana', short: 'M', defaultHours: 8, color: '#0284c7', isWork: true },
+  T: { id: 'T', name: 'Tarde', short: 'T', defaultHours: 8, color: '#ea580c', isWork: true },
+  N: { id: 'N', name: 'Noche', short: 'N', defaultHours: 8, color: '#7c3aed', isWork: true },
+  L: { id: 'L', name: 'Libre / Descanso', short: 'L', defaultHours: 0, color: '#10b981', isWork: false }
+};
+
+const MODIFIERS = {
+  F: { id: 'F', name: 'Festivo', short: 'FEST', color: '#e11d48', keepsHours: true, icon: '🎉' },
+  LD: { id: 'LD', name: 'Libre Disposición', short: 'LD', color: '#d946ef', keepsHours: true, icon: '⏱️' },
+  V: { id: 'V', name: 'Vacaciones', short: 'VAC', color: '#0d9488', keepsHours: false, icon: '🏖️' },
+  AP: { id: 'AP', name: 'Asuntos Propios', short: 'AP', color: '#6366f1', keepsHours: false, icon: '📑' }
 };
 
 const INITIAL_STATE = {
@@ -29,7 +32,19 @@ class StateManager {
       const saved = localStorage.getItem(STORAGE_KEY);
       if (saved) {
         const parsed = JSON.parse(saved);
-        return { config: { ...INITIAL_STATE.config, ...parsed.config }, shifts: parsed.shifts || {} };
+        const shifts = {};
+        Object.entries(parsed.shifts || {}).forEach(([dateStr, record]) => {
+          if (record.typeId) {
+            if (['V', 'AP', 'LD', 'F'].includes(record.typeId)) {
+              shifts[dateStr] = { shiftId: 'M', modifier: record.typeId, hours: record.hours || 0, overtime: record.overtime || 0, notes: record.notes || '' };
+            } else {
+              shifts[dateStr] = { shiftId: record.typeId, modifier: null, hours: record.hours || 8, overtime: record.overtime || 0, notes: record.notes || '' };
+            }
+          } else {
+            shifts[dateStr] = record;
+          }
+        });
+        return { config: { ...INITIAL_STATE.config, ...parsed.config }, shifts };
       }
     } catch (e) { console.warn(e); }
     return JSON.parse(JSON.stringify(INITIAL_STATE));
@@ -43,18 +58,18 @@ class StateManager {
     }
   }
 
-  getShift(dateStr) { return this.state.shifts[dateStr] || null; }
+  getDay(dateStr) { return this.state.shifts[dateStr] || null; }
 
-  setShift(dateStr, shiftData) {
-    if (!shiftData || !shiftData.typeId) {
+  setDay(dateStr, data) {
+    if (!data || (!data.shiftId && !data.modifier)) {
       delete this.state.shifts[dateStr];
     } else {
-      this.state.shifts[dateStr] = shiftData;
+      this.state.shifts[dateStr] = data;
     }
     this.saveState();
   }
 
-  deleteShift(dateStr) {
+  deleteDay(dateStr) {
     delete this.state.shifts[dateStr];
     this.saveState();
   }
@@ -81,7 +96,7 @@ class StateManager {
 
 const store = new StateManager();
 let currentDate = new Date();
-let activeStampShift = null;
+let activeStampTool = null;
 let selectedDateForModal = null;
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -139,35 +154,50 @@ function setupQuickStampPalette() {
   const normalBtn = document.createElement('button');
   normalBtn.className = 'stamp-btn active';
   normalBtn.id = 'stamp-btn-normal';
-  normalBtn.textContent = '👆 Normal (Detalle)';
-  normalBtn.onclick = () => selectStampMode(null);
+  normalBtn.textContent = '👆 Normal (Editar)';
+  normalBtn.onclick = () => selectStampTool(null);
   palette.appendChild(normalBtn);
 
-  Object.values(DEFAULT_SHIFT_TYPES).forEach(shift => {
+  Object.values(BASE_SHIFTS).forEach(shift => {
     const btn = document.createElement('button');
     btn.className = 'stamp-btn';
-    btn.dataset.shiftId = shift.id;
+    btn.dataset.stampType = 'base';
+    btn.dataset.stampId = shift.id;
     btn.style.backgroundColor = shift.color;
-    btn.textContent = `${shift.short} - ${shift.name}`;
-    btn.onclick = () => selectStampMode(shift.id);
+    btn.textContent = `${shift.short} (${shift.name})`;
+    btn.onclick = () => selectStampTool({ type: 'base', id: shift.id });
+    palette.appendChild(btn);
+  });
+
+  Object.values(MODIFIERS).forEach(mod => {
+    const btn = document.createElement('button');
+    btn.className = 'stamp-btn';
+    btn.dataset.stampType = 'modifier';
+    btn.dataset.stampId = mod.id;
+    btn.style.backgroundColor = mod.color;
+    btn.textContent = `${mod.icon} ${mod.short}`;
+    btn.onclick = () => selectStampTool({ type: 'modifier', id: mod.id });
     palette.appendChild(btn);
   });
 }
 
-function selectStampMode(shiftId) {
-  activeStampShift = shiftId;
+function selectStampTool(tool) {
+  activeStampTool = tool;
   const indicator = document.getElementById('stamp-indicator');
   const buttons = document.querySelectorAll('.stamp-btn');
   buttons.forEach(b => b.classList.remove('active'));
 
-  if (!shiftId) {
+  if (!tool) {
     document.getElementById('stamp-btn-normal').classList.add('active');
     indicator.textContent = 'Toque normal para detalles';
   } else {
-    const activeBtn = Array.from(buttons).find(b => b.dataset.shiftId === shiftId);
+    const activeBtn = Array.from(buttons).find(b => b.dataset.stampType === tool.type && b.dataset.stampId === tool.id);
     if (activeBtn) activeBtn.classList.add('active');
-    const shift = DEFAULT_SHIFT_TYPES[shiftId];
-    indicator.textContent = `Pintando: ${shift.name} (${shift.short})`;
+    if (tool.type === 'base') {
+      indicator.textContent = `Pintando Turno: ${BASE_SHIFTS[tool.id].name}`;
+    } else {
+      indicator.textContent = `Pintando Permiso: ${MODIFIERS[tool.id].name} (sin borrar turno)`;
+    }
   }
 }
 
@@ -215,23 +245,47 @@ function createDayCell(dateObj, isOtherMonth = false, isToday = false) {
   cell.dataset.date = dateStr;
 
   const dayNumber = dateObj.getDate();
-  const shiftRecord = store.getShift(dateStr);
+  const dayRecord = store.getDay(dateStr);
 
-  let shiftBadgeHtml = '';
+  let shiftHtml = '';
+  let modifierHtml = '';
   let hoursHtml = '';
   let dotHtml = '';
 
-  if (shiftRecord && DEFAULT_SHIFT_TYPES[shiftRecord.typeId]) {
-    const shiftInfo = DEFAULT_SHIFT_TYPES[shiftRecord.typeId];
-    shiftBadgeHtml = `<div class="day-shift-badge" style="background-color: ${shiftInfo.color};">${shiftInfo.short}</div>`;
-    const totalHours = (Number(shiftRecord.hours) || 0) + (Number(shiftRecord.overtime) || 0);
-    if (totalHours > 0) hoursHtml = `<div class="day-hours-pill">${totalHours}h</div>`;
-    if (shiftRecord.notes && shiftRecord.notes.trim() !== '') dotHtml = `<span class="has-notes-dot"></span>`;
+  if (dayRecord) {
+    if (dayRecord.shiftId && BASE_SHIFTS[dayRecord.shiftId]) {
+      const b = BASE_SHIFTS[dayRecord.shiftId];
+      shiftHtml = `<div class="day-shift-badge" style="background-color: ${b.color};">${b.short}</div>`;
+    }
+
+    if (dayRecord.modifier && MODIFIERS[dayRecord.modifier]) {
+      const m = MODIFIERS[dayRecord.modifier];
+      modifierHtml = `<div class="day-modifier-badge" style="background-color: ${m.color};">${m.icon} ${m.short}</div>`;
+    }
+
+    const h = Number(dayRecord.hours) || 0;
+    const ot = Number(dayRecord.overtime) || 0;
+    const totalH = h + ot;
+
+    if (dayRecord.modifier === 'V' || dayRecord.modifier === 'AP') {
+      hoursHtml = `<div class="day-hours-pill hours-vacation">0h</div>`;
+    } else if (dayRecord.modifier === 'F') {
+      hoursHtml = `<div class="day-hours-pill hours-festive">${totalH}h 🎈</div>`;
+    } else if (totalH > 0) {
+      hoursHtml = `<div class="day-hours-pill">${totalH}h</div>`;
+    }
+
+    if (dayRecord.notes && dayRecord.notes.trim() !== '') {
+      dotHtml = `<span class="has-notes-dot"></span>`;
+    }
   }
 
   cell.innerHTML = `
     <div class="day-header"><span class="day-number">${dayNumber}</span>${dotHtml}</div>
-    ${shiftBadgeHtml}
+    <div class="day-badges-wrap">
+      ${shiftHtml}
+      ${modifierHtml}
+    </div>
     ${hoursHtml}
   `;
 
@@ -240,22 +294,34 @@ function createDayCell(dateObj, isOtherMonth = false, isToday = false) {
 }
 
 function handleDayClick(dateStr, dateObj) {
-  if (activeStampShift) {
-    const shiftDef = DEFAULT_SHIFT_TYPES[activeStampShift];
-    const defaultHours = shiftDef.isWork ? (store.state.config.shiftHours[activeStampShift] || shiftDef.hours) : 0;
-    const existing = store.getShift(dateStr);
+  if (activeStampTool) {
+    const existing = store.getDay(dateStr) || { shiftId: 'M', modifier: null, hours: 8, overtime: 0, notes: '' };
 
-    if (existing && existing.typeId === activeStampShift) {
-      store.deleteShift(dateStr);
-    } else {
-      store.setShift(dateStr, {
-        typeId: activeStampShift,
-        hours: defaultHours,
-        overtime: 0,
-        notes: (existing && existing.notes) ? existing.notes : ''
-      });
+    if (activeStampTool.type === 'base') {
+      existing.shiftId = activeStampTool.id;
+      if (existing.modifier === 'V' || existing.modifier === 'AP') {
+        existing.hours = 0;
+      } else {
+        const baseDef = BASE_SHIFTS[activeStampTool.id];
+        existing.hours = baseDef.isWork ? (store.state.config.shiftHours[activeStampTool.id] || baseDef.defaultHours) : 0;
+      }
+    } else if (activeStampTool.type === 'modifier') {
+      if (existing.modifier === activeStampTool.id) {
+        existing.modifier = null;
+        const baseDef = BASE_SHIFTS[existing.shiftId] || BASE_SHIFTS.M;
+        existing.hours = baseDef.isWork ? (store.state.config.shiftHours[existing.shiftId] || baseDef.defaultHours) : 0;
+      } else {
+        existing.modifier = activeStampTool.id;
+        if (activeStampTool.id === 'F' || activeStampTool.id === 'LD') {
+          const baseDef = BASE_SHIFTS[existing.shiftId] || BASE_SHIFTS.M;
+          existing.hours = baseDef.isWork ? (store.state.config.shiftHours[existing.shiftId] || baseDef.defaultHours) : 8;
+        } else if (activeStampTool.id === 'V' || activeStampTool.id === 'AP') {
+          existing.hours = 0;
+        }
+      }
     }
 
+    store.setDay(dateStr, existing);
     if ('vibrate' in navigator) navigator.vibrate(30);
     renderAll();
   } else {
@@ -266,10 +332,16 @@ function handleDayClick(dateStr, dateObj) {
 function renderLegend() {
   const legendContainer = document.getElementById('legend-items');
   legendContainer.innerHTML = '';
-  Object.values(DEFAULT_SHIFT_TYPES).forEach(shift => {
+  Object.values(BASE_SHIFTS).forEach(shift => {
     const item = document.createElement('div');
     item.className = 'legend-item';
     item.innerHTML = `<span class="legend-color" style="background-color: ${shift.color};"></span><span>${shift.name} (${shift.short})</span>`;
+    legendContainer.appendChild(item);
+  });
+  Object.values(MODIFIERS).forEach(mod => {
+    const item = document.createElement('div');
+    item.className = 'legend-item';
+    item.innerHTML = `<span class="legend-color" style="background-color: ${mod.color};"></span><span>${mod.icon} ${mod.name}</span>`;
     legendContainer.appendChild(item);
   });
 }
@@ -279,27 +351,26 @@ function setupDayModal() {
 
   document.getElementById('modal-btn-save').addEventListener('click', () => {
     if (!selectedDateForModal) return;
-    const selectedChip = document.querySelector('.shift-chip.selected');
-    if (!selectedChip) { showToast('Selecciona un tipo de turno'); return; }
+    const baseChip = document.querySelector('#modal-base-shifts .shift-chip.selected');
+    const modChip = document.querySelector('#modal-modifiers .shift-chip.selected');
+    const shiftId = baseChip ? baseChip.dataset.id : 'M';
+    const modifier = (modChip && modChip.dataset.id !== 'NONE') ? modChip.dataset.id : null;
+    const hours = parseFloat(document.getElementById('input-day-hours').value) || 0;
+    const overtime = parseFloat(document.getElementById('input-day-overtime').value) || 0;
+    const notes = document.getElementById('input-day-notes').value.trim();
 
-    store.setShift(selectedDateForModal, {
-      typeId: selectedChip.dataset.typeId,
-      hours: parseFloat(document.getElementById('input-day-hours').value) || 0,
-      overtime: parseFloat(document.getElementById('input-day-overtime').value) || 0,
-      notes: document.getElementById('input-day-notes').value.trim()
-    });
-
+    store.setDay(selectedDateForModal, { shiftId, modifier, hours, overtime, notes });
     closeDayModal();
     renderAll();
-    showToast('✓ Turno guardado');
+    showToast('✓ Jornada guardada');
   });
 
   document.getElementById('modal-btn-delete').addEventListener('click', () => {
     if (!selectedDateForModal) return;
-    store.deleteShift(selectedDateForModal);
+    store.deleteDay(selectedDateForModal);
     closeDayModal();
     renderAll();
-    showToast('Turno eliminado');
+    showToast('Día limpiado');
   });
 }
 
@@ -308,41 +379,99 @@ function openDayModal(dateStr, dateObj) {
   const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
   document.getElementById('modal-date-title').textContent = dateObj.toLocaleDateString('es-ES', options);
 
-  const existingShift = store.getShift(dateStr);
-  const chipsContainer = document.getElementById('modal-shift-options');
-  chipsContainer.innerHTML = '';
+  const existing = store.getDay(dateStr) || { shiftId: 'M', modifier: null, hours: 8, overtime: 0, notes: '' };
 
-  Object.values(DEFAULT_SHIFT_TYPES).forEach(shift => {
+  const baseContainer = document.getElementById('modal-base-shifts');
+  baseContainer.innerHTML = '';
+  Object.values(BASE_SHIFTS).forEach(shift => {
     const chip = document.createElement('button');
     chip.type = 'button';
-    chip.className = 'shift-chip';
-    chip.dataset.typeId = shift.id;
+    chip.className = `shift-chip ${existing.shiftId === shift.id ? 'selected' : ''}`;
+    chip.dataset.id = shift.id;
     chip.style.backgroundColor = shift.color;
     chip.textContent = `${shift.short} - ${shift.name}`;
-
-    if (existingShift && existingShift.typeId === shift.id) chip.classList.add('selected');
-
     chip.addEventListener('click', () => {
-      document.querySelectorAll('.shift-chip').forEach(c => c.classList.remove('selected'));
+      document.querySelectorAll('#modal-base-shifts .shift-chip').forEach(c => c.classList.remove('selected'));
       chip.classList.add('selected');
-      const hoursInput = document.getElementById('input-day-hours');
-      hoursInput.value = shift.isWork ? (store.state.config.shiftHours[shift.id] || shift.hours) : 0;
+      updateModalComputedHours();
     });
-
-    chipsContainer.appendChild(chip);
+    baseContainer.appendChild(chip);
   });
 
-  if (existingShift) {
-    document.getElementById('input-day-hours').value = existingShift.hours || 0;
-    document.getElementById('input-day-overtime').value = existingShift.overtime || 0;
-    document.getElementById('input-day-notes').value = existingShift.notes || '';
-  } else {
-    document.getElementById('input-day-hours').value = 8;
-    document.getElementById('input-day-overtime').value = 0;
-    document.getElementById('input-day-notes').value = '';
-  }
+  const modContainer = document.getElementById('modal-modifiers');
+  modContainer.innerHTML = '';
 
+  const noneChip = document.createElement('button');
+  noneChip.type = 'button';
+  noneChip.className = `shift-chip ${!existing.modifier ? 'selected' : ''}`;
+  noneChip.dataset.id = 'NONE';
+  noneChip.style.backgroundColor = '#475569';
+  noneChip.textContent = 'Normal (Sin permiso)';
+  noneChip.addEventListener('click', () => {
+    document.querySelectorAll('#modal-modifiers .shift-chip').forEach(c => c.classList.remove('selected'));
+    noneChip.classList.add('selected');
+    updateModalComputedHours();
+  });
+  modContainer.appendChild(noneChip);
+
+  Object.values(MODIFIERS).forEach(mod => {
+    const chip = document.createElement('button');
+    chip.type = 'button';
+    chip.className = `shift-chip ${existing.modifier === mod.id ? 'selected' : ''}`;
+    chip.dataset.id = mod.id;
+    chip.style.backgroundColor = mod.color;
+    chip.textContent = `${mod.icon} ${mod.name}`;
+    chip.addEventListener('click', () => {
+      document.querySelectorAll('#modal-modifiers .shift-chip').forEach(c => c.classList.remove('selected'));
+      chip.classList.add('selected');
+      updateModalComputedHours();
+    });
+    modContainer.appendChild(chip);
+  });
+
+  document.getElementById('input-day-hours').value = existing.hours;
+  document.getElementById('input-day-overtime').value = existing.overtime || 0;
+  document.getElementById('input-day-notes').value = existing.notes || '';
+  updateModalNotice(existing.modifier);
   document.getElementById('day-modal').classList.remove('hidden');
+}
+
+function updateModalComputedHours() {
+  const baseChip = document.querySelector('#modal-base-shifts .shift-chip.selected');
+  const modChip = document.querySelector('#modal-modifiers .shift-chip.selected');
+  const shiftId = baseChip ? baseChip.dataset.id : 'M';
+  const modId = modChip ? modChip.dataset.id : 'NONE';
+
+  const hoursInput = document.getElementById('input-day-hours');
+  const baseDef = BASE_SHIFTS[shiftId] || BASE_SHIFTS.M;
+  const nominalHours = baseDef.isWork ? (store.state.config.shiftHours[shiftId] || baseDef.defaultHours) : 0;
+
+  if (modId === 'V' || modId === 'AP') {
+    hoursInput.value = 0;
+  } else if (modId === 'F' || modId === 'LD') {
+    hoursInput.value = nominalHours || 8;
+  } else {
+    hoursInput.value = nominalHours;
+  }
+  updateModalNotice(modId);
+}
+
+function updateModalNotice(modId) {
+  const notice = document.getElementById('modal-rule-notice');
+  notice.className = 'rule-notice';
+  if (modId === 'F') {
+    notice.classList.add('notice-festive');
+    notice.textContent = '🎉 Festivo marcado: No se borra tu turno. Se computan tus horas normales para cobrar el plus de festivo.';
+  } else if (modId === 'LD') {
+    notice.classList.add('notice-ld');
+    notice.textContent = '⏱️ Libre Disposición (LD): Mantiene tu turno, computa tu jornada completa y descuenta 1 día de LD.';
+  } else if (modId === 'V') {
+    notice.classList.add('notice-vacation');
+    notice.textContent = '🏖️ Vacaciones: Mantiene visible el turno de cuadrante, pero computa 0h de trabajo efectivo. Descuenta 1 día de vacaciones.';
+  } else if (modId === 'AP') {
+    notice.classList.add('notice-vacation');
+    notice.textContent = '📑 Asuntos Propios (AP): Mantiene el turno visible y computa 0h de trabajo efectivo. Descuenta 1 día de AP.';
+  }
 }
 
 function closeDayModal() {
@@ -359,10 +488,18 @@ function renderBalances() {
   const historyItems = [];
 
   Object.entries(store.state.shifts).forEach(([dateStr, record]) => {
-    if (dateStr.startsWith(currentYear.toString())) {
-      if (record.typeId === 'V') { usedVac++; historyItems.push({ date: dateStr, name: 'Vacaciones' }); }
-      else if (record.typeId === 'AP') { usedAP++; historyItems.push({ date: dateStr, name: 'Asuntos Propios' }); }
-      else if (record.typeId === 'LD') { usedLD++; historyItems.push({ date: dateStr, name: 'Libre Disposición' }); }
+    if (dateStr.startsWith(currentYear.toString()) && record.modifier) {
+      const shiftName = BASE_SHIFTS[record.shiftId]?.name || record.shiftId || 'Turno';
+      if (record.modifier === 'V') {
+        usedVac++;
+        historyItems.push({ date: dateStr, name: `Vacaciones (${shiftName})`, tag: '0h trabajadas' });
+      } else if (record.modifier === 'AP') {
+        usedAP++;
+        historyItems.push({ date: dateStr, name: `Asuntos Propios (${shiftName})`, tag: '0h trabajadas' });
+      } else if (record.modifier === 'LD') {
+        usedLD++;
+        historyItems.push({ date: dateStr, name: `Libre Disposición (${shiftName})`, tag: 'Jornada cobrada' });
+      }
     }
   });
 
@@ -388,7 +525,7 @@ function renderBalances() {
     historyItems.forEach(item => {
       const el = document.createElement('div');
       el.className = 'history-item';
-      el.innerHTML = `<span><strong>${formatPrettyDate(item.date)}</strong> - ${item.name}</span><span class="badge-status badge-neutral">Disfrutado</span>`;
+      el.innerHTML = `<span><strong>${formatPrettyDate(item.date)}</strong> - ${item.name}</span><span class="badge-status badge-neutral">${item.tag}</span>`;
       historyList.appendChild(el);
     });
   }
@@ -400,7 +537,7 @@ function renderCalculator() {
   const monthPrefix = `${year}-${String(month + 1).padStart(2, '0')}`;
 
   let totalWorkedHours = 0;
-  let totalOvertime = 0;
+  let totalFestiveHours = 0;
   const counts = { M: 0, T: 0, N: 0, L: 0, F: 0, V: 0, AP: 0, LD: 0 };
 
   Object.entries(store.state.shifts).forEach(([dateStr, record]) => {
@@ -408,8 +545,10 @@ function renderCalculator() {
       const h = Number(record.hours) || 0;
       const ot = Number(record.overtime) || 0;
       totalWorkedHours += h + ot;
-      totalOvertime += ot;
-      if (counts[record.typeId] !== undefined) counts[record.typeId]++;
+
+      if (record.shiftId && counts[record.shiftId] !== undefined) counts[record.shiftId]++;
+      if (record.modifier && counts[record.modifier] !== undefined) counts[record.modifier]++;
+      if (record.modifier === 'F') totalFestiveHours += (h + ot);
     }
   });
 
@@ -436,35 +575,40 @@ function renderCalculator() {
     badgeEl.className = 'badge-status badge-neutral';
   }
 
-  document.getElementById('calc-month-overtime').textContent = `+${totalOvertime}h extra`;
-
   document.getElementById('month-shifts-breakdown').innerHTML = `
-    <div class="breakdown-item"><span>☀️ Mañanas:</span> <strong>${counts.M}</strong></div>
-    <div class="breakdown-item"><span>🌤️ Tardes:</span> <strong>${counts.T}</strong></div>
-    <div class="breakdown-item"><span>🌙 Noches:</span> <strong>${counts.N}</strong></div>
-    <div class="breakdown-item"><span>🏖️ Vacaciones:</span> <strong>${counts.V}</strong></div>
-    <div class="breakdown-item"><span>📑 Asuntos Propios:</span> <strong>${counts.AP}</strong></div>
-    <div class="breakdown-item"><span>⏱️ Libre Disp.:</span> <strong>${counts.LD}</strong></div>
+    <div class="breakdown-item"><span>☀️ Mañanas cuadrante:</span> <strong>${counts.M}</strong></div>
+    <div class="breakdown-item"><span>🌤️ Tardes cuadrante:</span> <strong>${counts.T}</strong></div>
+    <div class="breakdown-item"><span>🌙 Noches cuadrante:</span> <strong>${counts.N}</strong></div>
+    <div class="breakdown-item"><span>🎉 Festivos trabajados:</span> <strong style="color:#f43f5e;">${counts.F} (${totalFestiveHours}h)</strong></div>
+    <div class="breakdown-item"><span>⏱️ Libre Disposición:</span> <strong style="color:#d946ef;">${counts.LD} días</strong></div>
+    <div class="breakdown-item"><span>🏖️ Vacaciones (0h):</span> <strong style="color:#0d9488;">${counts.V} días</strong></div>
+    <div class="breakdown-item"><span>📑 Asuntos Propios (0h):</span> <strong style="color:#6366f1;">${counts.AP} días</strong></div>
     <div class="breakdown-item"><span>🌱 Descansos / Libres:</span> <strong>${counts.L}</strong></div>
-    <div class="breakdown-item"><span>🎉 Festivos:</span> <strong>${counts.F}</strong></div>
   `;
 }
 
 function renderAudit() {
   const currentYear = currentDate.getFullYear();
   const allowances = store.state.config.annualAllowances;
-  let usedVac = 0, usedAP = 0, usedLD = 0, annualOvertime = 0;
+  let usedVac = 0, usedAP = 0, usedLD = 0, totalFestives = 0;
   const incidents = [];
 
   Object.entries(store.state.shifts).forEach(([dateStr, record]) => {
     if (dateStr.startsWith(currentYear.toString())) {
-      if (record.typeId === 'V') usedVac++;
-      if (record.typeId === 'AP') usedAP++;
-      if (record.typeId === 'LD') usedLD++;
+      if (record.modifier === 'V') usedVac++;
+      if (record.modifier === 'AP') usedAP++;
+      if (record.modifier === 'LD') usedLD++;
+      if (record.modifier === 'F') totalFestives++;
+
       const ot = Number(record.overtime) || 0;
-      annualOvertime += ot;
-      if ((record.notes && record.notes.trim() !== '') || ot > 0) {
-        incidents.push({ date: dateStr, overtime: ot, notes: record.notes || '' });
+      if ((record.notes && record.notes.trim() !== '') || ot > 0 || record.modifier === 'F') {
+        const shiftName = BASE_SHIFTS[record.shiftId]?.name || 'Turno';
+        const modName = record.modifier ? (MODIFIERS[record.modifier]?.name || '') : '';
+        incidents.push({
+          date: dateStr,
+          title: `${shiftName} ${modName ? `(${modName})` : ''} ${ot > 0 ? `+${ot}h extra` : ''}`,
+          notes: record.notes || (record.modifier === 'F' ? 'Festivo trabajado a cobrar con plus.' : 'Horas extraordinarias registradas.')
+        });
       }
     }
   });
@@ -472,19 +616,19 @@ function renderAudit() {
   document.getElementById('audit-vac-due').textContent = allowances.vacations - usedVac;
   document.getElementById('audit-ap-due').textContent = allowances.ap - usedAP;
   document.getElementById('audit-ld-due').textContent = allowances.ld - usedLD;
-  document.getElementById('audit-hours-balance').textContent = `+${annualOvertime}h`;
+  document.getElementById('audit-festives-due').textContent = totalFestives;
 
   const incidentsContainer = document.getElementById('audit-incidents-list');
   incidentsContainer.innerHTML = '';
 
   if (incidents.length === 0) {
-    incidentsContainer.innerHTML = '<p class="empty-state">No hay incidencias registradas este año.</p>';
+    incidentsContainer.innerHTML = '<p class="empty-state">No hay incidencias ni festivos registrados este año.</p>';
   } else {
     incidents.sort((a, b) => b.date.localeCompare(a.date));
     incidents.forEach(inc => {
       const item = document.createElement('div');
       item.className = 'incident-item';
-      item.innerHTML = `<div class="incident-date">${formatPrettyDate(inc.date)} ${inc.overtime > 0 ? `(+${inc.overtime}h extra)` : ''}</div><div>${inc.notes || 'Horas extras realizadas.'}</div>`;
+      item.innerHTML = `<div class="incident-date">${formatPrettyDate(inc.date)} - ${inc.title}</div><div>${inc.notes}</div>`;
       incidentsContainer.appendChild(item);
     });
   }
@@ -507,23 +651,26 @@ function setupAuditActions() {
 function generateWhatsAppReport() {
   const year = currentDate.getFullYear();
   const allowances = store.state.config.annualAllowances;
-  let usedVac = 0, usedAP = 0, usedLD = 0, totalOvertime = 0;
+  let usedVac = 0, usedAP = 0, usedLD = 0, totalFestives = 0;
 
   Object.entries(store.state.shifts).forEach(([dateStr, record]) => {
     if (dateStr.startsWith(year.toString())) {
-      if (record.typeId === 'V') usedVac++;
-      if (record.typeId === 'AP') usedAP++;
-      if (record.typeId === 'LD') usedLD++;
-      totalOvertime += (Number(record.overtime) || 0);
+      if (record.modifier === 'V') usedVac++;
+      if (record.modifier === 'AP') usedAP++;
+      if (record.modifier === 'LD') usedLD++;
+      if (record.modifier === 'F') totalFestives++;
     }
   });
 
-  return `📌 *COMUNICADO FORMAL - REGISTRO DE TURNOS Y JORNADA (${year})*
+  return `📌 *COMUNICADO DE CUADRANTE Y AUDITORÍA LABORAL (${year})*
 📅 *Fecha:* ${new Date().toLocaleDateString('es-ES')}
 
 Estimados/as responsables de Recursos Humanos / Jefatura de Turno,
 
-Resumen actualizado de mi balance de jornadas y permisos del ejercicio ${year}:
+Resumen detallado de mi balance de jornadas, festividades y permisos:
+
+🎉 *Festivos Trabajados:*
+• ${totalFestives} jornadas en festivo trabajadas según cuadrante (pendientes de abono/compensación de plus festivo).
 
 🏖️ *Vacaciones anuales:*
 • Asignadas: ${allowances.vacations} días | Disfrutadas: ${usedVac} | *Pendientes:* ${allowances.vacations - usedVac} días
@@ -534,7 +681,7 @@ Resumen actualizado de mi balance de jornadas y permisos del ejercicio ${year}:
 ⏱️ *Libre Disposición (LD):*
 • Asignados: ${allowances.ld} días | Disfrutados: ${usedLD} | *Pendientes:* ${allowances.ld - usedLD} días
 
-⏰ *Horas Extraordinarias:* +${totalOvertime} horas trabajadas a compensar/liquidar
+Solicito su cotejo con los registros de la empresa.
 
 Atentamente,
 _Registro de Turnos AntiBoss_`;
@@ -544,13 +691,14 @@ function preparePrintDocument() {
   const printArea = document.getElementById('print-area');
   const year = currentDate.getFullYear();
   const allowances = store.state.config.annualAllowances;
-  let usedVac = 0, usedAP = 0, usedLD = 0;
+  let usedVac = 0, usedAP = 0, usedLD = 0, festives = 0;
 
   Object.entries(store.state.shifts).forEach(([dateStr, record]) => {
     if (dateStr.startsWith(year.toString())) {
-      if (record.typeId === 'V') usedVac++;
-      if (record.typeId === 'AP') usedAP++;
-      if (record.typeId === 'LD') usedLD++;
+      if (record.modifier === 'V') usedVac++;
+      if (record.modifier === 'AP') usedAP++;
+      if (record.modifier === 'LD') usedLD++;
+      if (record.modifier === 'F') festives++;
     }
   });
 
@@ -560,11 +708,12 @@ function preparePrintDocument() {
       <p><strong>Año:</strong> ${year} | <strong>Fecha:</strong> ${new Date().toLocaleDateString('es-ES')}</p>
     </div>
     <table class="print-table">
-      <thead><tr><th>Concepto</th><th>Asignados</th><th>Disfrutados</th><th>Saldo Pendiente Real</th></tr></thead>
+      <thead><tr><th>Concepto</th><th>Asignados</th><th>Disfrutados / Trabajados</th><th>Saldo Pendiente / Plus</th></tr></thead>
       <tbody>
-        <tr><td>Vacaciones</td><td>${allowances.vacations} días</td><td>${usedVac}</td><td><strong>${allowances.vacations - usedVac} días</strong></td></tr>
-        <tr><td>Asuntos Propios</td><td>${allowances.ap} días</td><td>${usedAP}</td><td><strong>${allowances.ap - usedAP} días</strong></td></tr>
-        <tr><td>Libre Disposición</td><td>${allowances.ld} días</td><td>${usedLD}</td><td><strong>${allowances.ld - usedLD} días</strong></td></tr>
+        <tr><td>Festivos Trabajados (Plus Festivo)</td><td>-</td><td>${festives} días</td><td><strong>${festives} a liquidar</strong></td></tr>
+        <tr><td>Vacaciones</td><td>${allowances.vacations} días</td><td>${usedVac}</td><td><strong>${allowances.vacations - usedVac} días pendientes</strong></td></tr>
+        <tr><td>Asuntos Propios (AP)</td><td>${allowances.ap} días</td><td>${usedAP}</td><td><strong>${allowances.ap - usedAP} días pendientes</strong></td></tr>
+        <tr><td>Libre Disposición (LD)</td><td>${allowances.ld} días</td><td>${usedLD}</td><td><strong>${allowances.ld - usedLD} días pendientes</strong></td></tr>
       </tbody>
     </table>
   `;
@@ -585,7 +734,7 @@ function renderQuickHeaderStats() {
 
   let usedVac = 0;
   Object.entries(store.state.shifts).forEach(([dateStr, record]) => {
-    if (dateStr.startsWith(year.toString()) && record.typeId === 'V') usedVac++;
+    if (dateStr.startsWith(year.toString()) && record.modifier === 'V') usedVac++;
   });
   document.getElementById('quick-vac').textContent = `${store.state.config.annualAllowances.vacations - usedVac} pend.`;
 
@@ -625,7 +774,7 @@ function setupSettingsModal() {
     });
     modal.classList.add('hidden');
     renderAll();
-    showToast('✓ Ajustes guardados localmente');
+    showToast('✓ Ajustes guardados');
   });
 
   document.getElementById('btn-export-backup').addEventListener('click', () => {
