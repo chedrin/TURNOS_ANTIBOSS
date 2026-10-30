@@ -45,11 +45,11 @@
           <span id="quick-hours" class="stat-val">0h / 160h</span>
         </div>
         <div class="stat-pill">
-          <span class="stat-label">Vacaciones:</span>
+          <span class="stat-label">Vacaciones Fin Año:</span>
           <span id="quick-vac" class="stat-val stat-highlight">-- pend.</span>
         </div>
         <div class="stat-pill">
-          <span class="stat-label">Balance:</span>
+          <span class="stat-label">Balance Mes:</span>
           <span id="quick-balance" class="stat-val">0h</span>
         </div>
       </div>
@@ -62,7 +62,7 @@
       </button>
       <button class="nav-tab" data-tab="tab-balances">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/><line x1="20" y1="8" x2="20" y2="14"/><line x1="23" y1="11" x2="17" y2="11"/></svg>
-        <span>Saldos</span>
+        <span>Saldos y Devengo</span>
       </button>
       <button class="nav-tab" data-tab="tab-calculator">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="2" width="16" height="20" rx="2"/><line x1="8" y1="6" x2="16" y2="6"/><line x1="16" y1="14" x2="16" y2="18"/><path d="M16 10h.01"/><path d="M12 10h.01"/><path d="M8 10h.01"/><path d="M12 14h.01"/><path d="M8 14h.01"/><path d="M12 18h.01"/><path d="M8 18h.01"/></svg>
@@ -75,6 +75,7 @@
     </nav>
 
     <main class="main-content">
+      <!-- CALENDARIO -->
       <section id="tab-calendar" class="tab-pane active">
         <div class="calendar-nav-bar">
           <button id="btn-prev-month" class="btn-nav" aria-label="Mes anterior">
@@ -94,7 +95,7 @@
         <div class="quick-stamp-container no-print">
           <div class="quick-stamp-header">
             <span class="stamp-mode-title">🎨 Asignación Rápida:</span>
-            <span id="stamp-indicator" class="stamp-indicator">Toque normal para detalles</span>
+            <span id="stamp-indicator" class="stamp-indicator">Toque normal para editar o doblar turno</span>
           </div>
           <div id="quick-stamp-palette" class="stamp-palette"></div>
         </div>
@@ -107,81 +108,151 @@
         </div>
 
         <div class="legend-card no-print">
-          <div class="legend-title">Leyenda de Turnos y Permisos</div>
+          <div class="legend-title">Leyenda de Turnos, Doblajes y Permisos</div>
           <div id="legend-items" class="legend-grid"></div>
         </div>
       </section>
 
+      <!-- SALDOS Y DEVENGO -->
       <section id="tab-balances" class="tab-pane">
         <div class="section-header">
-          <h2>Panel de Permisos y Vacaciones</h2>
-          <p class="section-desc">Cálculo en tiempo real: Se descuentan tus días de permiso manteniendo visible tu turno de cuadrante.</p>
+          <h2>Panel de Devengo y Saldos Anuales</h2>
+          <p class="section-desc">Cálculo proporcional exacto: Proyección a final de año (considerando jornada mensual normal de convenio) vs. Saldo consolidado a fecha de hoy.</p>
+        </div>
+
+        <div class="projection-summary-card">
+          <div class="proj-header">
+            <span class="proj-badge">Cómputo Anual de Convenio</span>
+            <span id="proj-year-badge" class="proj-year">Año 2026</span>
+          </div>
+          <div class="proj-grid">
+            <div>
+              <span class="proj-label">Horas Estimadas Fin de Año:</span>
+              <strong id="proj-annual-hours">0h</strong>
+            </div>
+            <div>
+              <span class="proj-label">Convenio Anual Exigido:</span>
+              <strong id="proj-target-annual-hours">1920h</strong>
+            </div>
+          </div>
         </div>
 
         <div class="balances-grid">
+          <!-- Vacaciones -->
           <div class="balance-card balance-vac">
             <div class="balance-card-header">
-              <div class="balance-title"><span class="balance-icon">🏖️</span><h3>Vacaciones Anuales</h3></div>
+              <div class="balance-title"><span class="balance-icon">🏖️</span><h3>Vacaciones</h3></div>
               <span class="balance-tag">Horas turno = 0h</span>
             </div>
+            
             <div class="balance-numbers">
-              <div class="num-box"><span class="num-label">Asignadas</span><span id="vac-assigned" class="num-val">22</span></div>
+              <div class="num-box">
+                <span class="num-label">Convenio Anual</span>
+                <span id="vac-assigned" class="num-val">22</span>
+              </div>
               <div class="num-separator">-</div>
-              <div class="num-box"><span class="num-label">Disfrutadas</span><span id="vac-used" class="num-val text-warning">0</span></div>
+              <div class="num-box">
+                <span class="num-label">Disfrutadas</span>
+                <span id="vac-used" class="num-val text-warning">0</span>
+              </div>
               <div class="num-separator">=</div>
-              <div class="num-box highlight"><span class="num-label">Saldo Pendiente</span><span id="vac-remaining" class="num-val text-primary">22</span></div>
+              <div class="num-box highlight">
+                <span class="num-label">Saldo Fin de Año</span>
+                <span id="vac-remaining" class="num-val text-primary">22</span>
+              </div>
             </div>
+
+            <div class="accrual-subrow">
+              <span>Devengado a fecha de hoy: <strong id="vac-accrued-today">0</strong> días</span>
+              <span>Saldo liquidable actual: <strong id="vac-balance-today" class="text-accent">0</strong> días</span>
+            </div>
+
             <div class="progress-bar-bg"><div id="vac-progress" class="progress-bar-fill" style="width: 0%"></div></div>
           </div>
 
+          <!-- Asuntos Propios -->
           <div class="balance-card balance-ap">
             <div class="balance-card-header">
               <div class="balance-title"><span class="balance-icon">📑</span><h3>Asuntos Propios (AP)</h3></div>
               <span class="balance-tag">Horas turno = 0h</span>
             </div>
+            
             <div class="balance-numbers">
-              <div class="num-box"><span class="num-label">Asignados</span><span id="ap-assigned" class="num-val">6</span></div>
+              <div class="num-box">
+                <span class="num-label">Convenio Anual</span>
+                <span id="ap-assigned" class="num-val">6</span>
+              </div>
               <div class="num-separator">-</div>
-              <div class="num-box"><span class="num-label">Disfrutados</span><span id="ap-used" class="num-val text-warning">0</span></div>
+              <div class="num-box">
+                <span class="num-label">Disfrutados</span>
+                <span id="ap-used" class="num-val text-warning">0</span>
+              </div>
               <div class="num-separator">=</div>
-              <div class="num-box highlight"><span class="num-label">Saldo Pendiente</span><span id="ap-remaining" class="num-val text-primary">6</span></div>
+              <div class="num-box highlight">
+                <span class="num-label">Saldo Fin de Año</span>
+                <span id="ap-remaining" class="num-val text-primary">6</span>
+              </div>
             </div>
+
+            <div class="accrual-subrow">
+              <span>Devengado a fecha de hoy: <strong id="ap-accrued-today">0</strong> días</span>
+              <span>Saldo liquidable actual: <strong id="ap-balance-today" class="text-accent">0</strong> días</span>
+            </div>
+
             <div class="progress-bar-bg"><div id="ap-progress" class="progress-bar-fill" style="width: 0%"></div></div>
           </div>
 
+          <!-- Libre Disposición -->
           <div class="balance-card balance-ld">
             <div class="balance-card-header">
               <div class="balance-title"><span class="balance-icon">⏱️</span><h3>Libre Disposición (LD)</h3></div>
-              <span class="balance-tag text-success">Suma horas turno</span>
+              <span class="balance-tag text-success">Suma horas normales</span>
             </div>
+            
             <div class="balance-numbers">
-              <div class="num-box"><span class="num-label">Asignados</span><span id="ld-assigned" class="num-val">4</span></div>
+              <div class="num-box">
+                <span class="num-label">Convenio Anual</span>
+                <span id="ld-assigned" class="num-val">4</span>
+              </div>
               <div class="num-separator">-</div>
-              <div class="num-box"><span class="num-label">Disfrutados</span><span id="ld-used" class="num-val text-warning">0</span></div>
+              <div class="num-box">
+                <span class="num-label">Disfrutados</span>
+                <span id="ld-used" class="num-val text-warning">0</span>
+              </div>
               <div class="num-separator">=</div>
-              <div class="num-box highlight"><span class="num-label">Saldo Pendiente</span><span id="ld-remaining" class="num-val text-primary">4</span></div>
+              <div class="num-box highlight">
+                <span class="num-label">Saldo Fin de Año</span>
+                <span id="ld-remaining" class="num-val text-primary">4</span>
+              </div>
             </div>
+
+            <div class="accrual-subrow">
+              <span>Devengado a fecha de hoy: <strong id="ld-accrued-today">0</strong> días</span>
+              <span>Saldo liquidable actual: <strong id="ld-balance-today" class="text-accent">0</strong> días</span>
+            </div>
+
             <div class="progress-bar-bg"><div id="ld-progress" class="progress-bar-fill" style="width: 0%"></div></div>
           </div>
         </div>
 
         <div class="history-card">
-          <h3 class="card-subtitle">Historial Detallado de Días Disfrutados</h3>
+          <h3 class="card-subtitle">Historial de Permisos Registrados en el Año</h3>
           <div id="permissions-history-list" class="history-list"></div>
         </div>
       </section>
 
+      <!-- CALCULADORA DE HORAS -->
       <section id="tab-calculator" class="tab-pane">
         <div class="section-header">
           <h2>Calculadora y Balances Mensuales</h2>
-          <p class="section-desc">Auditoría automática de horas trabajadas y festividades.</p>
+          <p class="section-desc">Auditoría automática de horas trabajadas, doblajes de turno y festividades.</p>
         </div>
 
         <div class="calc-metrics-grid">
           <div class="calc-card">
             <span class="calc-label">Horas Trabajadas Computables (Mes)</span>
             <div class="calc-big-number"><span id="calc-worked-hours">0</span> <small>horas</small></div>
-            <div class="calc-subinfo">Turnos normales + Festivos + LD (+ horas extra)</div>
+            <div class="calc-subinfo">Turnos simples + Doblados + Festivos + LD (+ horas extra)</div>
           </div>
 
           <div class="calc-card">
@@ -191,18 +262,19 @@
           </div>
 
           <div class="calc-card highlight-card">
-            <span class="calc-label">Balance Neto</span>
+            <span class="calc-label">Balance Neto del Mes</span>
             <div class="calc-big-number" id="calc-balance-container"><span id="calc-balance-hours">0</span> <small>horas</small></div>
             <div id="calc-balance-badge" class="badge-status">En equilibrio</div>
           </div>
         </div>
 
         <div class="breakdown-card">
-          <h3 class="card-subtitle">Desglose de Jornadas del Mes</h3>
+          <h3 class="card-subtitle">Desglose de Jornadas y Doblajes del Mes</h3>
           <div id="month-shifts-breakdown" class="breakdown-list"></div>
         </div>
       </section>
 
+      <!-- AUDITORÍA ANTIFRAUDE -->
       <section id="tab-audit" class="tab-pane">
         <div class="audit-banner">
           <div class="audit-shield">
@@ -210,24 +282,24 @@
           </div>
           <div>
             <h2>Auditoría Antifraude Laboral</h2>
-            <p>Tus cuentas de turnos, festivos y vacaciones claras para confrontar con la empresa.</p>
+            <p>Control exacto de turnos doblados, festivos pendientes de cobro y saldo de vacaciones.</p>
           </div>
         </div>
 
         <div class="anti-boss-summary-card">
-          <h3 class="summary-head">Resumen de Derechos que la Empresa te Debe</h3>
+          <h3 class="summary-head">Resumen de Derechos que la Empresa te Debe (Fin de Año)</h3>
           <div class="audit-kpi-grid">
-            <div class="audit-kpi"><div class="kpi-value text-accent" id="audit-vac-due">0</div><div class="kpi-label">Vacaciones Pendientes</div></div>
-            <div class="audit-kpi"><div class="kpi-value text-accent" id="audit-ap-due">0</div><div class="kpi-label">Asuntos Propios Pendientes</div></div>
-            <div class="audit-kpi"><div class="kpi-value text-accent" id="audit-ld-due">0</div><div class="kpi-label">Libre Disposición Pendiente</div></div>
+            <div class="audit-kpi"><div class="kpi-value text-accent" id="audit-vac-due">0</div><div class="kpi-label">Vacaciones Fin de Año</div></div>
+            <div class="audit-kpi"><div class="kpi-value text-accent" id="audit-ap-due">0</div><div class="kpi-label">Asuntos Propios Fin de Año</div></div>
+            <div class="audit-kpi"><div class="kpi-value text-accent" id="audit-ld-due">0</div><div class="kpi-label">Libre Disposición Fin de Año</div></div>
             <div class="audit-kpi"><div class="kpi-value text-festive" id="audit-festives-due">0</div><div class="kpi-label">Festivos Trabajados (a cobrar)</div></div>
           </div>
         </div>
 
         <div class="incidents-card">
           <div class="incidents-header">
-            <h3>Bitácora de Observaciones y Salidas Tardías</h3>
-            <span class="subtext">Notas guardadas en días con incidencias o cambios imprevistos</span>
+            <h3>Bitácora de Observaciones, Doblajes y Salidas Tardías</h3>
+            <span class="subtext">Registro de jornadas dobles, incidencias y notas</span>
           </div>
           <div id="audit-incidents-list" class="incidents-list"></div>
         </div>
@@ -248,22 +320,28 @@
       </section>
     </main>
 
+    <!-- MODAL DETALLE DE DÍA (DOBLAR TURNOS & MULTI-SELECCIÓN) -->
     <div id="day-modal" class="modal-overlay hidden" role="dialog" aria-modal="true">
       <div class="modal-card">
         <div class="modal-header">
           <div>
             <h3 id="modal-date-title" class="modal-title">Fecha</h3>
-            <span id="modal-date-subtitle" class="modal-sub">Detalle de jornada y permisos</span>
+            <span id="modal-date-subtitle" class="modal-sub">Puedes marcar Mañana, Tarde y Noche a la vez si doblas turno</span>
           </div>
           <button id="modal-btn-close" class="btn-close" aria-label="Cerrar">&times;</button>
         </div>
 
         <div class="modal-body">
+          <!-- 1. Turnos de Cuadrante (Multi-select) -->
           <div class="form-group">
-            <label class="form-label">1. Turno de Cuadrante (Base)</label>
+            <label class="form-label">
+              1. Turnos de Cuadrante
+              <span class="label-hint">(Toca varios para doblar jornada: M + T, T + N, etc.)</span>
+            </label>
             <div id="modal-base-shifts" class="shift-chips-selector"></div>
           </div>
 
+          <!-- 2. Permiso o Condición Especial -->
           <div class="form-group">
             <label class="form-label">2. Permiso o Condición Especial</label>
             <div id="modal-modifiers" class="shift-chips-selector"></div>
@@ -271,20 +349,22 @@
 
           <div id="modal-rule-notice" class="rule-notice"></div>
 
+          <!-- Horas Computadas -->
           <div class="form-row-2">
             <div class="form-group">
-              <label for="input-day-hours" class="form-label">Horas Computadas</label>
+              <label for="input-day-hours" class="form-label">Horas Computadas (Suma turnos)</label>
               <input type="number" id="input-day-hours" class="form-control" step="0.5" min="0" max="24">
             </div>
             <div class="form-group">
-              <label for="input-day-overtime" class="form-label">Horas Extra</label>
+              <label for="input-day-overtime" class="form-label">Horas Extra (adicionales)</label>
               <input type="number" id="input-day-overtime" class="form-control" step="0.5" min="0" max="12" value="0">
             </div>
           </div>
 
+          <!-- Notas -->
           <div class="form-group">
             <label for="input-day-notes" class="form-label">Notas e Incidencias Laborales</label>
-            <textarea id="input-day-notes" class="form-control text-area" rows="2" placeholder="Ej: Festivo trabajado en turno de mañana."></textarea>
+            <textarea id="input-day-notes" class="form-control text-area" rows="2" placeholder="Ej: Turno doblado Mañana y Tarde (16h)."></textarea>
           </div>
         </div>
 
@@ -295,6 +375,7 @@
       </div>
     </div>
 
+    <!-- MODAL AJUSTES -->
     <div id="settings-modal" class="modal-overlay hidden" role="dialog" aria-modal="true">
       <div class="modal-card modal-lg">
         <div class="modal-header">
@@ -307,7 +388,7 @@
 
         <div class="modal-body settings-body">
           <div class="settings-section">
-            <h4 class="settings-section-title">Asignación Anual de Días (Convenio)</h4>
+            <h4 class="settings-section-title">Asignación Anual de Convenio</h4>
             <div class="form-row-3">
               <div class="form-group">
                 <label for="cfg-vacations" class="form-label">Vacaciones (días)</label>
@@ -324,13 +405,14 @@
             </div>
 
             <div class="form-group">
-              <label for="cfg-target-hours" class="form-label">Horas Estándar Mensuales exigidas por convenio</label>
+              <label for="cfg-target-hours" class="form-label">Horas Estándar Mensuales de Convenio</label>
               <input type="number" id="cfg-target-hours" class="form-control" min="1" max="250" value="160">
+              <span class="label-hint">Base para proyectar que los meses restantes se trabajan a jornada normal.</span>
             </div>
           </div>
 
           <div class="settings-section">
-            <h4 class="settings-section-title">Horas Nominales por Turno</h4>
+            <h4 class="settings-section-title">Horas Nominales por Turno Individual</h4>
             <div class="form-row-3">
               <div class="form-group">
                 <label for="cfg-hours-m" class="form-label">Mañana (M)</label>

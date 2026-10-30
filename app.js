@@ -21,6 +21,7 @@ const INITIAL_STATE = {
     annualAllowances: { vacations: 22, ap: 6, ld: 4 },
     shiftHours: { M: 8, T: 8, N: 8 }
   },
+  // Cada día guarda: { shiftIds: ['M', 'T'], modifier: 'F'|null, hours: 16, overtime: 0, notes: '' }
   shifts: {}
 };
 
@@ -33,17 +34,32 @@ class StateManager {
       if (saved) {
         const parsed = JSON.parse(saved);
         const shifts = {};
+
+        // Migración a shiftIds (array para permitir doblar turnos)
         Object.entries(parsed.shifts || {}).forEach(([dateStr, record]) => {
-          if (record.typeId) {
+          let shiftIds = [];
+          if (Array.isArray(record.shiftIds)) {
+            shiftIds = record.shiftIds;
+          } else if (record.shiftId) {
+            shiftIds = [record.shiftId];
+          } else if (record.typeId) {
             if (['V', 'AP', 'LD', 'F'].includes(record.typeId)) {
-              shifts[dateStr] = { shiftId: 'M', modifier: record.typeId, hours: record.hours || 0, overtime: record.overtime || 0, notes: record.notes || '' };
+              shiftIds = ['M'];
+              record.modifier = record.typeId;
             } else {
-              shifts[dateStr] = { shiftId: record.typeId, modifier: null, hours: record.hours || 8, overtime: record.overtime || 0, notes: record.notes || '' };
+              shiftIds = [record.typeId];
             }
-          } else {
-            shifts[dateStr] = record;
           }
+
+          shifts[dateStr] = {
+            shiftIds: shiftIds.length > 0 ? shiftIds : ['M'],
+            modifier: record.modifier || null,
+            hours: Number(record.hours) || 0,
+            overtime: Number(record.overtime) || 0,
+            notes: record.notes || ''
+          };
         });
+
         return { config: { ...INITIAL_STATE.config, ...parsed.config }, shifts };
       }
     } catch (e) { console.warn(e); }
@@ -61,7 +77,7 @@ class StateManager {
   getDay(dateStr) { return this.state.shifts[dateStr] || null; }
 
   setDay(dateStr, data) {
-    if (!data || (!data.shiftId && !data.modifier)) {
+    if (!data || (!data.shiftIds?.length && !data.modifier)) {
       delete this.state.shifts[dateStr];
     } else {
       this.state.shifts[dateStr] = data;
@@ -154,10 +170,11 @@ function setupQuickStampPalette() {
   const normalBtn = document.createElement('button');
   normalBtn.className = 'stamp-btn active';
   normalBtn.id = 'stamp-btn-normal';
-  normalBtn.textContent = '👆 Normal (Editar)';
+  normalBtn.textContent = '👆 Normal (Editar/Doblar)';
   normalBtn.onclick = () => selectStampTool(null);
   palette.appendChild(normalBtn);
 
+  // Turnos simples
   Object.values(BASE_SHIFTS).forEach(shift => {
     const btn = document.createElement('button');
     btn.className = 'stamp-btn';
@@ -165,10 +182,19 @@ function setupQuickStampPalette() {
     btn.dataset.stampId = shift.id;
     btn.style.backgroundColor = shift.color;
     btn.textContent = `${shift.short} (${shift.name})`;
-    btn.onclick = () => selectStampTool({ type: 'base', id: shift.id });
+    btn.onclick = () => selectStampTool({ type: 'base', ids: [shift.id] });
     palette.appendChild(btn);
   });
 
+  // Doblaje rápido: M + T (16h)
+  const doubleBtn = document.createElement('button');
+  doubleBtn.className = 'stamp-btn';
+  doubleBtn.style.background = 'linear-gradient(90deg, #0284c7 0%, #ea580c 100%)';
+  doubleBtn.textContent = '⚡ Doblar M+T (16h)';
+  doubleBtn.onclick = () => selectStampTool({ type: 'base', ids: ['M', 'T'] });
+  palette.appendChild(doubleBtn);
+
+  // Modificadores
   Object.values(MODIFIERS).forEach(mod => {
     const btn = document.createElement('button');
     btn.className = 'stamp-btn';
@@ -189,14 +215,14 @@ function selectStampTool(tool) {
 
   if (!tool) {
     document.getElementById('stamp-btn-normal').classList.add('active');
-    indicator.textContent = 'Toque normal para detalles';
+    indicator.textContent = 'Toque en el día para editar o doblar turno';
   } else {
-    const activeBtn = Array.from(buttons).find(b => b.dataset.stampType === tool.type && b.dataset.stampId === tool.id);
-    if (activeBtn) activeBtn.classList.add('active');
     if (tool.type === 'base') {
-      indicator.textContent = `Pintando Turno: ${BASE_SHIFTS[tool.id].name}`;
+      const names = tool.ids.map(id => BASE_SHIFTS[id]?.name).join(' + ');
+      indicator.textContent = `Pintando: ${names}`;
     } else {
-      indicator.textContent = `Pintando Permiso: ${MODIFIERS[tool.id].name} (sin borrar turno)`;
+      const m = MODIFIERS[tool.id];
+      indicator.textContent = `Pintando Permiso: ${m.name}`;
     }
   }
 }
@@ -247,15 +273,22 @@ function createDayCell(dateObj, isOtherMonth = false, isToday = false) {
   const dayNumber = dateObj.getDate();
   const dayRecord = store.getDay(dateStr);
 
-  let shiftHtml = '';
+  let shiftsHtml = '';
   let modifierHtml = '';
   let hoursHtml = '';
   let dotHtml = '';
 
   if (dayRecord) {
-    if (dayRecord.shiftId && BASE_SHIFTS[dayRecord.shiftId]) {
-      const b = BASE_SHIFTS[dayRecord.shiftId];
-      shiftHtml = `<div class="day-shift-badge" style="background-color: ${b.color};">${b.short}</div>`;
+    const shiftIds = dayRecord.shiftIds || [];
+    if (shiftIds.length > 0) {
+      shiftsHtml = '<div class="shifts-row">';
+      shiftIds.forEach(id => {
+        const b = BASE_SHIFTS[id];
+        if (b) {
+          shiftsHtml += `<div class="day-shift-badge" style="background-color: ${b.color};">${b.short}</div>`;
+        }
+      });
+      shiftsHtml += '</div>';
     }
 
     if (dayRecord.modifier && MODIFIERS[dayRecord.modifier]) {
@@ -271,6 +304,8 @@ function createDayCell(dateObj, isOtherMonth = false, isToday = false) {
       hoursHtml = `<div class="day-hours-pill hours-vacation">0h</div>`;
     } else if (dayRecord.modifier === 'F') {
       hoursHtml = `<div class="day-hours-pill hours-festive">${totalH}h 🎈</div>`;
+    } else if (shiftIds.length > 1) {
+      hoursHtml = `<div class="day-hours-pill hours-doubled">${totalH}h ⚡</div>`;
     } else if (totalH > 0) {
       hoursHtml = `<div class="day-hours-pill">${totalH}h</div>`;
     }
@@ -283,7 +318,7 @@ function createDayCell(dateObj, isOtherMonth = false, isToday = false) {
   cell.innerHTML = `
     <div class="day-header"><span class="day-number">${dayNumber}</span>${dotHtml}</div>
     <div class="day-badges-wrap">
-      ${shiftHtml}
+      ${shiftsHtml}
       ${modifierHtml}
     </div>
     ${hoursHtml}
@@ -295,30 +330,18 @@ function createDayCell(dateObj, isOtherMonth = false, isToday = false) {
 
 function handleDayClick(dateStr, dateObj) {
   if (activeStampTool) {
-    const existing = store.getDay(dateStr) || { shiftId: 'M', modifier: null, hours: 8, overtime: 0, notes: '' };
+    const existing = store.getDay(dateStr) || { shiftIds: ['M'], modifier: null, hours: 8, overtime: 0, notes: '' };
 
     if (activeStampTool.type === 'base') {
-      existing.shiftId = activeStampTool.id;
-      if (existing.modifier === 'V' || existing.modifier === 'AP') {
-        existing.hours = 0;
-      } else {
-        const baseDef = BASE_SHIFTS[activeStampTool.id];
-        existing.hours = baseDef.isWork ? (store.state.config.shiftHours[activeStampTool.id] || baseDef.defaultHours) : 0;
-      }
+      existing.shiftIds = [...activeStampTool.ids];
+      existing.hours = calculateShiftsTotalHours(existing.shiftIds, existing.modifier);
     } else if (activeStampTool.type === 'modifier') {
       if (existing.modifier === activeStampTool.id) {
         existing.modifier = null;
-        const baseDef = BASE_SHIFTS[existing.shiftId] || BASE_SHIFTS.M;
-        existing.hours = baseDef.isWork ? (store.state.config.shiftHours[existing.shiftId] || baseDef.defaultHours) : 0;
       } else {
         existing.modifier = activeStampTool.id;
-        if (activeStampTool.id === 'F' || activeStampTool.id === 'LD') {
-          const baseDef = BASE_SHIFTS[existing.shiftId] || BASE_SHIFTS.M;
-          existing.hours = baseDef.isWork ? (store.state.config.shiftHours[existing.shiftId] || baseDef.defaultHours) : 8;
-        } else if (activeStampTool.id === 'V' || activeStampTool.id === 'AP') {
-          existing.hours = 0;
-        }
       }
+      existing.hours = calculateShiftsTotalHours(existing.shiftIds, existing.modifier);
     }
 
     store.setDay(dateStr, existing);
@@ -329,15 +352,35 @@ function handleDayClick(dateStr, dateObj) {
   }
 }
 
+function calculateShiftsTotalHours(shiftIds, modifier) {
+  if (modifier === 'V' || modifier === 'AP') return 0;
+
+  let sum = 0;
+  shiftIds.forEach(id => {
+    const def = BASE_SHIFTS[id];
+    if (def && def.isWork) {
+      sum += (store.state.config.shiftHours[id] !== undefined) ? store.state.config.shiftHours[id] : def.defaultHours;
+    }
+  });
+  return sum;
+}
+
 function renderLegend() {
   const legendContainer = document.getElementById('legend-items');
   legendContainer.innerHTML = '';
+
   Object.values(BASE_SHIFTS).forEach(shift => {
     const item = document.createElement('div');
     item.className = 'legend-item';
     item.innerHTML = `<span class="legend-color" style="background-color: ${shift.color};"></span><span>${shift.name} (${shift.short})</span>`;
     legendContainer.appendChild(item);
   });
+
+  const doubleItem = document.createElement('div');
+  doubleItem.className = 'legend-item';
+  doubleItem.innerHTML = `<span class="legend-color" style="background: linear-gradient(90deg, #0284c7, #ea580c);"></span><span>⚡ Doblaje (M+T, T+N...)</span>`;
+  legendContainer.appendChild(doubleItem);
+
   Object.values(MODIFIERS).forEach(mod => {
     const item = document.createElement('div');
     item.className = 'legend-item';
@@ -346,20 +389,31 @@ function renderLegend() {
   });
 }
 
+// ==================== MODAL DE DÍA (MULTI-SELECCIÓN) ====================
 function setupDayModal() {
   document.getElementById('modal-btn-close').addEventListener('click', closeDayModal);
 
   document.getElementById('modal-btn-save').addEventListener('click', () => {
     if (!selectedDateForModal) return;
-    const baseChip = document.querySelector('#modal-base-shifts .shift-chip.selected');
+
+    const selectedBaseChips = document.querySelectorAll('#modal-base-shifts .shift-chip.selected');
+    const shiftIds = Array.from(selectedBaseChips).map(c => c.dataset.id);
+
     const modChip = document.querySelector('#modal-modifiers .shift-chip.selected');
-    const shiftId = baseChip ? baseChip.dataset.id : 'M';
     const modifier = (modChip && modChip.dataset.id !== 'NONE') ? modChip.dataset.id : null;
+
     const hours = parseFloat(document.getElementById('input-day-hours').value) || 0;
     const overtime = parseFloat(document.getElementById('input-day-overtime').value) || 0;
     const notes = document.getElementById('input-day-notes').value.trim();
 
-    store.setDay(selectedDateForModal, { shiftId, modifier, hours, overtime, notes });
+    store.setDay(selectedDateForModal, {
+      shiftIds: shiftIds.length > 0 ? shiftIds : ['M'],
+      modifier,
+      hours,
+      overtime,
+      notes
+    });
+
     closeDayModal();
     renderAll();
     showToast('✓ Jornada guardada');
@@ -379,25 +433,47 @@ function openDayModal(dateStr, dateObj) {
   const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
   document.getElementById('modal-date-title').textContent = dateObj.toLocaleDateString('es-ES', options);
 
-  const existing = store.getDay(dateStr) || { shiftId: 'M', modifier: null, hours: 8, overtime: 0, notes: '' };
+  const existing = store.getDay(dateStr) || { shiftIds: ['M'], modifier: null, hours: 8, overtime: 0, notes: '' };
+  const currentShiftIds = existing.shiftIds || ['M'];
 
+  // 1. Selector Multi-Turno Base
   const baseContainer = document.getElementById('modal-base-shifts');
   baseContainer.innerHTML = '';
+
   Object.values(BASE_SHIFTS).forEach(shift => {
     const chip = document.createElement('button');
     chip.type = 'button';
-    chip.className = `shift-chip ${existing.shiftId === shift.id ? 'selected' : ''}`;
+    const isSelected = currentShiftIds.includes(shift.id);
+    chip.className = `shift-chip ${isSelected ? 'selected' : ''}`;
     chip.dataset.id = shift.id;
     chip.style.backgroundColor = shift.color;
-    chip.textContent = `${shift.short} - ${shift.name}`;
+    chip.textContent = `${shift.short} - ${shift.name} (${shift.defaultHours}h)`;
+
     chip.addEventListener('click', () => {
-      document.querySelectorAll('#modal-base-shifts .shift-chip').forEach(c => c.classList.remove('selected'));
-      chip.classList.add('selected');
+      if (shift.id === 'L') {
+        // Libre desmarca los demás
+        document.querySelectorAll('#modal-base-shifts .shift-chip').forEach(c => c.classList.remove('selected'));
+        chip.classList.add('selected');
+      } else {
+        // Desmarcar Libre si se pulsa un turno de trabajo
+        const libreChip = document.querySelector('#modal-base-shifts .shift-chip[data-id="L"]');
+        if (libreChip) libreChip.classList.remove('selected');
+
+        // Toggle multi-select
+        chip.classList.toggle('selected');
+      }
+
+      // Asegurar al menos uno seleccionado
+      const anySelected = document.querySelectorAll('#modal-base-shifts .shift-chip.selected');
+      if (anySelected.length === 0) chip.classList.add('selected');
+
       updateModalComputedHours();
     });
+
     baseContainer.appendChild(chip);
   });
 
+  // 2. Modificadores
   const modContainer = document.getElementById('modal-modifiers');
   modContainer.innerHTML = '';
 
@@ -421,6 +497,7 @@ function openDayModal(dateStr, dateObj) {
     chip.dataset.id = mod.id;
     chip.style.backgroundColor = mod.color;
     chip.textContent = `${mod.icon} ${mod.name}`;
+
     chip.addEventListener('click', () => {
       document.querySelectorAll('#modal-modifiers .shift-chip').forEach(c => c.classList.remove('selected'));
       chip.classList.add('selected');
@@ -432,45 +509,46 @@ function openDayModal(dateStr, dateObj) {
   document.getElementById('input-day-hours').value = existing.hours;
   document.getElementById('input-day-overtime').value = existing.overtime || 0;
   document.getElementById('input-day-notes').value = existing.notes || '';
+
   updateModalNotice(existing.modifier);
   document.getElementById('day-modal').classList.remove('hidden');
 }
 
 function updateModalComputedHours() {
-  const baseChip = document.querySelector('#modal-base-shifts .shift-chip.selected');
+  const selectedBaseChips = document.querySelectorAll('#modal-base-shifts .shift-chip.selected');
+  const shiftIds = Array.from(selectedBaseChips).map(c => c.dataset.id);
+
   const modChip = document.querySelector('#modal-modifiers .shift-chip.selected');
-  const shiftId = baseChip ? baseChip.dataset.id : 'M';
   const modId = modChip ? modChip.dataset.id : 'NONE';
 
-  const hoursInput = document.getElementById('input-day-hours');
-  const baseDef = BASE_SHIFTS[shiftId] || BASE_SHIFTS.M;
-  const nominalHours = baseDef.isWork ? (store.state.config.shiftHours[shiftId] || baseDef.defaultHours) : 0;
+  const totalHours = calculateShiftsTotalHours(shiftIds, modId === 'NONE' ? null : modId);
+  document.getElementById('input-day-hours').value = totalHours;
 
-  if (modId === 'V' || modId === 'AP') {
-    hoursInput.value = 0;
-  } else if (modId === 'F' || modId === 'LD') {
-    hoursInput.value = nominalHours || 8;
-  } else {
-    hoursInput.value = nominalHours;
-  }
   updateModalNotice(modId);
 }
 
 function updateModalNotice(modId) {
   const notice = document.getElementById('modal-rule-notice');
   notice.className = 'rule-notice';
+
+  const selectedBaseChips = document.querySelectorAll('#modal-base-shifts .shift-chip.selected');
+  const isDoubled = selectedBaseChips.length > 1;
+
   if (modId === 'F') {
     notice.classList.add('notice-festive');
-    notice.textContent = '🎉 Festivo marcado: No se borra tu turno. Se computan tus horas normales para cobrar el plus de festivo.';
+    notice.textContent = `🎉 Festivo: ${isDoubled ? '¡Turno doblado en festivo! Se computan las horas de ambos turnos para cobrarlas con plus.' : 'Se computan tus horas normales de turno para cobrarlas con plus festivo.'}`;
   } else if (modId === 'LD') {
     notice.classList.add('notice-ld');
-    notice.textContent = '⏱️ Libre Disposición (LD): Mantiene tu turno, computa tu jornada completa y descuenta 1 día de LD.';
+    notice.textContent = '⏱️ Libre Disposición (LD): Mantiene tu turno/doblaje, suma tus horas completas de jornada y descuenta 1 día de LD.';
   } else if (modId === 'V') {
     notice.classList.add('notice-vacation');
-    notice.textContent = '🏖️ Vacaciones: Mantiene visible el turno de cuadrante, pero computa 0h de trabajo efectivo. Descuenta 1 día de vacaciones.';
+    notice.textContent = '🏖️ Vacaciones: Mantiene visible el turno que te tocaba, pero computa 0h de trabajo efectivo. Descuenta 1 día de vacaciones.';
   } else if (modId === 'AP') {
     notice.classList.add('notice-vacation');
-    notice.textContent = '📑 Asuntos Propios (AP): Mantiene el turno visible y computa 0h de trabajo efectivo. Descuenta 1 día de AP.';
+    notice.textContent = '📑 Asuntos Propios (AP): Mantiene visibles los turnos de cuadrante y computa 0h de trabajo efectivo. Descuenta 1 día de AP.';
+  } else if (isDoubled) {
+    notice.classList.add('notice-ld');
+    notice.textContent = '⚡ Turno Doblado: Has seleccionado varios turnos en el mismo día. Sus horas se suman automáticamente.';
   }
 }
 
@@ -479,44 +557,102 @@ function closeDayModal() {
   selectedDateForModal = null;
 }
 
+// ==================== CÁLCULO DE SALDOS, DEVENGO Y PROYECCIÓN ANUAL ====================
 function renderBalances() {
   const currentYear = currentDate.getFullYear();
   const allowances = store.state.config.annualAllowances;
+  const targetMonthlyHours = Number(store.state.config.targetMonthlyHours) || 160;
+  const annualTargetHours = targetMonthlyHours * 12;
+
   let usedVac = 0, usedAP = 0, usedLD = 0;
   const historyList = document.getElementById('permissions-history-list');
   historyList.innerHTML = '';
   const historyItems = [];
 
+  // Calcular horas trabajadas reales hasta hoy en el año
+  let totalWorkedHoursYearToDate = 0;
+  const now = new Date();
+  const currentMonthIdx = now.getMonth(); // 0 a 11
+  const dayOfYear = getDayOfYear(now);
+  const totalDaysYear = isLeapYear(currentYear) ? 366 : 365;
+
   Object.entries(store.state.shifts).forEach(([dateStr, record]) => {
-    if (dateStr.startsWith(currentYear.toString()) && record.modifier) {
-      const shiftName = BASE_SHIFTS[record.shiftId]?.name || record.shiftId || 'Turno';
-      if (record.modifier === 'V') {
-        usedVac++;
-        historyItems.push({ date: dateStr, name: `Vacaciones (${shiftName})`, tag: '0h trabajadas' });
-      } else if (record.modifier === 'AP') {
-        usedAP++;
-        historyItems.push({ date: dateStr, name: `Asuntos Propios (${shiftName})`, tag: '0h trabajadas' });
-      } else if (record.modifier === 'LD') {
-        usedLD++;
-        historyItems.push({ date: dateStr, name: `Libre Disposición (${shiftName})`, tag: 'Jornada cobrada' });
+    if (dateStr.startsWith(currentYear.toString())) {
+      const h = Number(record.hours) || 0;
+      const ot = Number(record.overtime) || 0;
+      totalWorkedHoursYearToDate += (h + ot);
+
+      if (record.modifier) {
+        const shiftsNames = (record.shiftIds || []).map(id => BASE_SHIFTS[id]?.short).join('+') || 'Turno';
+        if (record.modifier === 'V') {
+          usedVac++;
+          historyItems.push({ date: dateStr, name: `Vacaciones (${shiftsNames})`, tag: '0h trabajadas' });
+        } else if (record.modifier === 'AP') {
+          usedAP++;
+          historyItems.push({ date: dateStr, name: `Asuntos Propios (${shiftsNames})`, tag: '0h trabajadas' });
+        } else if (record.modifier === 'LD') {
+          usedLD++;
+          historyItems.push({ date: dateStr, name: `Libre Disposición (${shiftsNames})`, tag: 'Jornada cobrada' });
+        }
       }
     }
   });
 
+  // Proyección a final de año considerando que los meses restantes se trabajan a jornada normal de convenio:
+  // Meses restantes hasta final de año: (11 - currentMonthIdx)
+  const remainingMonths = Math.max(0, 11 - currentMonthIdx);
+  const projectedFutureHours = remainingMonths * targetMonthlyHours;
+  const totalProjectedHoursEndYear = totalWorkedHoursYearToDate + projectedFutureHours;
+
+  // Ratios de Devengo
+  // 1. A fecha de hoy (según el progreso del año):
+  const progressRatioToday = Math.min(1, dayOfYear / totalDaysYear);
+  // 2. Proyección a final de año (considerando jornada mensual normal de convenio):
+  const projectedRatioEndYear = Math.max(1, totalProjectedHoursEndYear / annualTargetHours);
+
+  // Días devengados a fecha de hoy
+  const vacAccruedToday = parseFloat((allowances.vacations * progressRatioToday).toFixed(1));
+  const apAccruedToday = parseFloat((allowances.ap * progressRatioToday).toFixed(1));
+  const ldAccruedToday = parseFloat((allowances.ld * progressRatioToday).toFixed(1));
+
+  // Saldos proyectados a final de año
+  const vacRemainingEndYear = allowances.vacations - usedVac;
+  const apRemainingEndYear = allowances.ap - usedAP;
+  const ldRemainingEndYear = allowances.ld - usedLD;
+
+  // Saldos liquidables a día de hoy
+  const vacBalanceToday = parseFloat((vacAccruedToday - usedVac).toFixed(1));
+  const apBalanceToday = parseFloat((apAccruedToday - usedAP).toFixed(1));
+  const ldBalanceToday = parseFloat((ldAccruedToday - usedLD).toFixed(1));
+
+  // Tarjeta de cabecera de proyección
+  document.getElementById('proj-annual-hours').textContent = `${totalProjectedHoursEndYear}h`;
+  document.getElementById('proj-target-annual-hours').textContent = `${annualTargetHours}h`;
+  document.getElementById('proj-year-badge').textContent = `Año ${currentYear}`;
+
+  // Actualizar Vacaciones
   document.getElementById('vac-assigned').textContent = allowances.vacations;
   document.getElementById('vac-used').textContent = usedVac;
-  document.getElementById('vac-remaining').textContent = allowances.vacations - usedVac;
-  document.getElementById('vac-progress').style.width = `${Math.min(100, Math.round((usedVac / (allowances.vacations || 1)) * 100))}%`;
+  document.getElementById('vac-remaining').textContent = vacRemainingEndYear;
+  document.getElementById('vac-accrued-today').textContent = vacAccruedToday;
+  document.getElementById('vac-balance-today').textContent = vacBalanceToday > 0 ? `+${vacBalanceToday}` : vacBalanceToday;
+  document.getElementById('vac-progress').style.width = `${Math.min(100, Math.round((usedVac / allowances.vacations) * 100))}%`;
 
+  // Actualizar AP
   document.getElementById('ap-assigned').textContent = allowances.ap;
   document.getElementById('ap-used').textContent = usedAP;
-  document.getElementById('ap-remaining').textContent = allowances.ap - usedAP;
-  document.getElementById('ap-progress').style.width = `${Math.min(100, Math.round((usedAP / (allowances.ap || 1)) * 100))}%`;
+  document.getElementById('ap-remaining').textContent = apRemainingEndYear;
+  document.getElementById('ap-accrued-today').textContent = apAccruedToday;
+  document.getElementById('ap-balance-today').textContent = apBalanceToday > 0 ? `+${apBalanceToday}` : apBalanceToday;
+  document.getElementById('ap-progress').style.width = `${Math.min(100, Math.round((usedAP / allowances.ap) * 100))}%`;
 
+  // Actualizar LD
   document.getElementById('ld-assigned').textContent = allowances.ld;
   document.getElementById('ld-used').textContent = usedLD;
-  document.getElementById('ld-remaining').textContent = allowances.ld - usedLD;
-  document.getElementById('ld-progress').style.width = `${Math.min(100, Math.round((usedLD / (allowances.ld || 1)) * 100))}%`;
+  document.getElementById('ld-remaining').textContent = ldRemainingEndYear;
+  document.getElementById('ld-accrued-today').textContent = ldAccruedToday;
+  document.getElementById('ld-balance-today').textContent = ldBalanceToday > 0 ? `+${ldBalanceToday}` : ldBalanceToday;
+  document.getElementById('ld-progress').style.width = `${Math.min(100, Math.round((usedLD / allowances.ld) * 100))}%`;
 
   if (historyItems.length === 0) {
     historyList.innerHTML = '<p class="empty-state">No has registrado días de Vacaciones, AP o LD este año.</p>';
@@ -538,6 +674,7 @@ function renderCalculator() {
 
   let totalWorkedHours = 0;
   let totalFestiveHours = 0;
+  let doubledDaysCount = 0;
   const counts = { M: 0, T: 0, N: 0, L: 0, F: 0, V: 0, AP: 0, LD: 0 };
 
   Object.entries(store.state.shifts).forEach(([dateStr, record]) => {
@@ -546,7 +683,13 @@ function renderCalculator() {
       const ot = Number(record.overtime) || 0;
       totalWorkedHours += h + ot;
 
-      if (record.shiftId && counts[record.shiftId] !== undefined) counts[record.shiftId]++;
+      const sIds = record.shiftIds || [];
+      if (sIds.length > 1) doubledDaysCount++;
+
+      sIds.forEach(id => {
+        if (counts[id] !== undefined) counts[id]++;
+      });
+
       if (record.modifier && counts[record.modifier] !== undefined) counts[record.modifier]++;
       if (record.modifier === 'F') totalFestiveHours += (h + ot);
     }
@@ -563,7 +706,7 @@ function renderCalculator() {
 
   if (diff > 0) {
     balanceEl.textContent = `+${diff}`;
-    badgeEl.textContent = `+${diff}h a tu favor`;
+    badgeEl.textContent = `+${diff}h a tu favor (Horas acumuladas)`;
     badgeEl.className = 'badge-status badge-positive';
   } else if (diff < 0) {
     balanceEl.textContent = diff;
@@ -576,14 +719,14 @@ function renderCalculator() {
   }
 
   document.getElementById('month-shifts-breakdown').innerHTML = `
-    <div class="breakdown-item"><span>☀️ Mañanas cuadrante:</span> <strong>${counts.M}</strong></div>
-    <div class="breakdown-item"><span>🌤️ Tardes cuadrante:</span> <strong>${counts.T}</strong></div>
-    <div class="breakdown-item"><span>🌙 Noches cuadrante:</span> <strong>${counts.N}</strong></div>
+    <div class="breakdown-item"><span>☀️ Mañanas realizadas:</span> <strong>${counts.M}</strong></div>
+    <div class="breakdown-item"><span>🌤️ Tardes realizadas:</span> <strong>${counts.T}</strong></div>
+    <div class="breakdown-item"><span>🌙 Noches realizadas:</span> <strong>${counts.N}</strong></div>
+    <div class="breakdown-item"><span>⚡ Días con Turno Doblado:</span> <strong style="color:#38bdf8;">${doubledDaysCount} días</strong></div>
     <div class="breakdown-item"><span>🎉 Festivos trabajados:</span> <strong style="color:#f43f5e;">${counts.F} (${totalFestiveHours}h)</strong></div>
     <div class="breakdown-item"><span>⏱️ Libre Disposición:</span> <strong style="color:#d946ef;">${counts.LD} días</strong></div>
     <div class="breakdown-item"><span>🏖️ Vacaciones (0h):</span> <strong style="color:#0d9488;">${counts.V} días</strong></div>
     <div class="breakdown-item"><span>📑 Asuntos Propios (0h):</span> <strong style="color:#6366f1;">${counts.AP} días</strong></div>
-    <div class="breakdown-item"><span>🌱 Descansos / Libres:</span> <strong>${counts.L}</strong></div>
   `;
 }
 
@@ -601,13 +744,15 @@ function renderAudit() {
       if (record.modifier === 'F') totalFestives++;
 
       const ot = Number(record.overtime) || 0;
-      if ((record.notes && record.notes.trim() !== '') || ot > 0 || record.modifier === 'F') {
-        const shiftName = BASE_SHIFTS[record.shiftId]?.name || 'Turno';
+      const isDoubled = (record.shiftIds || []).length > 1;
+
+      if ((record.notes && record.notes.trim() !== '') || ot > 0 || record.modifier === 'F' || isDoubled) {
+        const shiftsText = (record.shiftIds || []).map(id => BASE_SHIFTS[id]?.name).join(' + ') || 'Turno';
         const modName = record.modifier ? (MODIFIERS[record.modifier]?.name || '') : '';
         incidents.push({
           date: dateStr,
-          title: `${shiftName} ${modName ? `(${modName})` : ''} ${ot > 0 ? `+${ot}h extra` : ''}`,
-          notes: record.notes || (record.modifier === 'F' ? 'Festivo trabajado a cobrar con plus.' : 'Horas extraordinarias registradas.')
+          title: `${shiftsText} ${modName ? `(${modName})` : ''} ${ot > 0 ? `+${ot}h extra` : ''}`,
+          notes: record.notes || (isDoubled ? 'Jornada doble realizada.' : (record.modifier === 'F' ? 'Festivo trabajado a cobrar con plus.' : 'Horas extra registradas.'))
         });
       }
     }
@@ -622,7 +767,7 @@ function renderAudit() {
   incidentsContainer.innerHTML = '';
 
   if (incidents.length === 0) {
-    incidentsContainer.innerHTML = '<p class="empty-state">No hay incidencias ni festivos registrados este año.</p>';
+    incidentsContainer.innerHTML = '<p class="empty-state">No hay incidencias, festivos ni doblajes registrados este año.</p>';
   } else {
     incidents.sort((a, b) => b.date.localeCompare(a.date));
     incidents.forEach(inc => {
@@ -662,29 +807,31 @@ function generateWhatsAppReport() {
     }
   });
 
-  return `📌 *COMUNICADO DE CUADRANTE Y AUDITORÍA LABORAL (${year})*
+  return `📌 *COMUNICADO DE CUADRANTE, DEVENGO Y AUDITORÍA LABORAL (${year})*
 📅 *Fecha:* ${new Date().toLocaleDateString('es-ES')}
 
 Estimados/as responsables de Recursos Humanos / Jefatura de Turno,
 
-Resumen detallado de mi balance de jornadas, festividades y permisos:
+Resumen detallado de mi balance de jornadas, devengo y permisos:
 
 🎉 *Festivos Trabajados:*
-• ${totalFestives} jornadas en festivo trabajadas según cuadrante (pendientes de abono/compensación de plus festivo).
+• ${totalFestives} jornadas en festivo trabajadas según cuadrante (pendientes de cobro de plus festivo).
 
 🏖️ *Vacaciones anuales:*
-• Asignadas: ${allowances.vacations} días | Disfrutadas: ${usedVac} | *Pendientes:* ${allowances.vacations - usedVac} días
+• Asignadas por convenio: ${allowances.vacations} días
+• Disfrutadas a la fecha: ${usedVac} días
+• *Saldo restante proyectado a fin de año:* ${allowances.vacations - usedVac} días
 
 📑 *Asuntos Propios (AP):*
-• Asignados: ${allowances.ap} días | Disfrutados: ${usedAP} | *Pendientes:* ${allowances.ap - usedAP} días
+• Asignados: ${allowances.ap} días | Disfrutados: ${usedAP} | *Saldo restante:* ${allowances.ap - usedAP} días
 
 ⏱️ *Libre Disposición (LD):*
-• Asignados: ${allowances.ld} días | Disfrutados: ${usedLD} | *Pendientes:* ${allowances.ld - usedLD} días
+• Asignados: ${allowances.ld} días | Disfrutados: ${usedLD} | *Saldo restante:* ${allowances.ld - usedLD} días
 
-Solicito su cotejo con los registros de la empresa.
+Solicito su cotejo formal con los registros de la empresa.
 
 Atentamente,
-_Registro de Turnos AntiBoss_`;
+_Registro de Turnos AntiBoss PWA_`;
 }
 
 function preparePrintDocument() {
@@ -708,9 +855,9 @@ function preparePrintDocument() {
       <p><strong>Año:</strong> ${year} | <strong>Fecha:</strong> ${new Date().toLocaleDateString('es-ES')}</p>
     </div>
     <table class="print-table">
-      <thead><tr><th>Concepto</th><th>Asignados</th><th>Disfrutados / Trabajados</th><th>Saldo Pendiente / Plus</th></tr></thead>
+      <thead><tr><th>Concepto</th><th>Convenio Anual</th><th>Disfrutados / Trabajados</th><th>Saldo Proyectado a Fin de Año</th></tr></thead>
       <tbody>
-        <tr><td>Festivos Trabajados (Plus Festivo)</td><td>-</td><td>${festives} días</td><td><strong>${festives} a liquidar</strong></td></tr>
+        <tr><td>Festivos Trabajados (Plus Festivo)</td><td>-</td><td>${festives} jornadas</td><td><strong>${festives} a liquidar</strong></td></tr>
         <tr><td>Vacaciones</td><td>${allowances.vacations} días</td><td>${usedVac}</td><td><strong>${allowances.vacations - usedVac} días pendientes</strong></td></tr>
         <tr><td>Asuntos Propios (AP)</td><td>${allowances.ap} días</td><td>${usedAP}</td><td><strong>${allowances.ap - usedAP} días pendientes</strong></td></tr>
         <tr><td>Libre Disposición (LD)</td><td>${allowances.ld} días</td><td>${usedLD}</td><td><strong>${allowances.ld - usedLD} días pendientes</strong></td></tr>
@@ -831,6 +978,17 @@ function formatDateKey(date) {
 function formatPrettyDate(dateStr) {
   const [y, m, d] = dateStr.split('-');
   return `${d}/${m}/${y}`;
+}
+
+function getDayOfYear(date) {
+  const start = new Date(date.getFullYear(), 0, 0);
+  const diff = date - start;
+  const oneDay = 1000 * 60 * 60 * 24;
+  return Math.floor(diff / oneDay);
+}
+
+function isLeapYear(year) {
+  return (year % 4 === 0 && year % 100 !== 0) || (year % 400 === 0);
 }
 
 function showToast(message) {
